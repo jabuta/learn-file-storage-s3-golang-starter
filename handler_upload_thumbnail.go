@@ -30,6 +30,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	video, err := cfg.db.GetVideo(videoID)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Can't fetch video data", err)
+		return
+	}
+	if video.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "Not authorized to update this video", nil)
+		return
+	}
+
 	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
 
 	const maxMemory int64 = 10 << 20
@@ -49,7 +59,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer uploadedThumbnail.Close()
 
-	mediatype, err := getMediaType(thumbnailHeader.Header.Get("Content-Type"))
+	mediatype, err := getMediaTypeFromHeader(thumbnailHeader)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "invalid media type", err)
 		return
@@ -59,11 +69,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	assetPath, err := getAssetPath(videoID, mediatype)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "invalid media type", err)
-		return
-	}
+	assetPath := getAssetPath(mediatype)
 
 	filepath := cfg.getAssetDiskPath(assetPath)
 
@@ -82,14 +88,8 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	video, err := cfg.db.GetVideo(videoID)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Can't fetch video data", err)
-		return
-	}
-	if video.UserID != userID {
-		respondWithError(w, http.StatusUnauthorized, "Not authorized to update this video", nil)
-		return
+	if *video.ThumbnailURL != "" {
+		os.Remove(cfg.getAssetDiskPath(cfg.getOldDiskPath(*video.ThumbnailURL)))
 	}
 
 	assetURL := cfg.getAssetURL(assetPath)
