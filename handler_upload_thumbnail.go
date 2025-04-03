@@ -88,7 +88,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if *video.ThumbnailURL != "" {
+	if video.ThumbnailURL != nil {
 		os.Remove(cfg.getAssetDiskPath(cfg.getOldDiskPath(*video.ThumbnailURL)))
 	}
 
