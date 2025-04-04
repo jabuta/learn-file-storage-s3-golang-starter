@@ -94,7 +94,6 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	if err := json.Unmarshal(videodata.Bytes(), &videoJsonData); err != nil {
 		return "", err
 	}
-	fmt.Printf("work 1")
 	for _, stream := range videoJsonData.Streams {
 		if stream.CodecType == "video" {
 			switch stream.AspectRatio {

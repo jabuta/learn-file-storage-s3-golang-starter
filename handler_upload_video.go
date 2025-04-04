@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -85,12 +87,20 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "temp file failed to copy", err)
 		return
 	}
-	if _, err := tempVideo.Seek(0, io.SeekStart); err != nil {
-		respondWithError(w, http.StatusInternalServerError, "temp file failed to move pointer", err)
+	processedVideo, err := processVideoForFastStart(tempVideo.Name())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid video file", err)
 		return
 	}
+	defer os.Remove(processedVideo)
+	processedVideoFile, err := os.Open(processedVideo)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "cant open processed video", err)
+		return
+	}
+	defer processedVideoFile.Close()
 
-	aspectRatio, err := getVideoAspectRatio(tempVideo.Name())
+	aspectRatio, err := getVideoAspectRatio(processedVideoFile.Name())
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "invalid video", err)
 	}
@@ -99,7 +109,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	upload := &s3.PutObjectInput{
 		Bucket:      aws.String(cfg.s3Bucket),
 		Key:         aws.String(assetkey),
-		Body:        tempVideo,
+		Body:        processedVideoFile,
 		ContentType: aws.String(mediatype),
 	}
 
@@ -115,4 +125,31 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "failed to update database", err)
 		return
 	}
+}
+
+func processVideoForFastStart(filePath string) (string, error) {
+	processedFilePath := filePath + ".processing"
+	cmd := exec.Command("ffmpeg",
+		"-i", filePath,
+		"-c", "copy",
+		"-movflags", "faststart",
+		"-f", "mp4",
+		processedFilePath)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("error processing video: %s, %v", stderr.String(), err)
+	}
+
+	fileInfo, err := os.Stat(processedFilePath)
+	if err != nil {
+		return "", fmt.Errorf("could not stat processed file: %v", err)
+	}
+	if fileInfo.Size() == 0 {
+		return "", fmt.Errorf("processed file is empty")
+	}
+
+	return processedFilePath, nil
 }
