@@ -125,6 +125,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "failed to update database", err)
 		return
 	}
+	respondWithJSON(w, http.StatusOK, video)
 }
 
 func processVideoForFastStart(filePath string) (string, error) {

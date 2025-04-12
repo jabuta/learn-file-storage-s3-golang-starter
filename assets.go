@@ -61,10 +61,10 @@ func getMediaTypeFromHeader(header *multipart.FileHeader) (string, error) {
 	return mediaType, nil
 }
 
+// Video url is returned as cloudfront distrubition/key
 func (cfg apiConfig) getVideoURL(key string) string {
-	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s",
-		cfg.s3Bucket,
-		cfg.s3Region,
+	return fmt.Sprintf("%s/%s",
+		cfg.s3CfDistribution,
 		key)
 }
 
@@ -106,5 +106,31 @@ func getVideoAspectRatio(filePath string) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("Not a video file")
+	return "", errors.New("not a video file")
 }
+
+/*
+func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
+	presignClient := s3.NewPresignClient(s3Client)
+	presignedRequest, err := presignClient.PresignGetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(expireTime))
+	if err != nil {
+		return "", err
+	}
+	return presignedRequest.URL, nil
+}
+
+func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
+	videoURL := strings.Split(*video.VideoURL, ",")
+	url, err := generatePresignedURL(cfg.s3Client, videoURL[0], videoURL[1], time.Hour*2)
+	if err != nil {
+		return video, err
+	}
+
+	video.VideoURL = &url
+
+	return video, nil
+}
+*/
